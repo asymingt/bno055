@@ -28,7 +28,6 @@
 
 
 import sys
-import threading
 
 from bno055.connectors.i2c import I2C
 from bno055.connectors.uart import UART
@@ -51,15 +50,26 @@ class Bno055Node(Node):
     sensor = None
     param = None
 
+    rot_timer = None
+    imu_timer = None
+    mag_timer = None
+    tmp_timer = None
+    cal_timer = None
+    gra_timer = None
+
     def __init__(self):
+
         # Initialize parent (ROS Node)
         super().__init__('bno055')
 
     def setup(self):
+
         # Initialize ROS2 Node Parameters:
+        
         self.param = NodeParameters(self)
 
         # Get connector according to configured sensor connection type:
+
         if self.param.connection_type.value == UART.CONNECTIONTYPE_UART:
             connector = UART(self,
                              self.param.uart_baudrate.value,
@@ -74,96 +84,54 @@ class Bno055Node(Node):
                                       + str(self.param.connection_type.value))
 
         # Connect to BNO055 device:
+        
         connector.connect()
 
         # Instantiate the sensor Service API:
+        
         self.sensor = SensorService(self, connector, self.param)
 
-        # configure imu
+        # Configure device
+
         self.sensor.configure()
 
+        # Start all requested timers
+
+        if self.param.rot_query_frequency.value > 0:
+            self.rot_timer = self.create_timer(
+                1.0 / float(self.param.rot_query_frequency.value), self.sensor.pub_rot_data)
+
+        if self.param.gra_query_frequency.value > 0:
+            self.gra_timer = self.create_timer(
+                1.0 / float(self.param.gra_query_frequency.value), self.sensor.pub_gra_data)
+
+        if self.param.imu_query_frequency.value > 0:
+            self.imu_timer = self.create_timer(
+                1.0 / float(self.param.imu_query_frequency.value), self.sensor.pub_imu_data)
+        
+        if self.param.mag_query_frequency.value > 0:
+            self.mag_timer = self.create_timer(
+                1.0 / float(self.param.mag_query_frequency.value), self.sensor.pub_mag_data)
+                
+        if self.param.tmp_query_frequency.value > 0:
+            self.tmp_timer = self.create_timer(
+                1.0 / float(self.param.tmp_query_frequency.value), self.sensor.pub_tmp_data)
+
+        if self.param.cal_query_frequency.value > 0:
+            self.cal_timer = self.create_timer(
+                1.0 / float(self.param.cal_query_frequency.value), self.sensor.pub_cal_data) 
 
 def main(args=None):
+    rclpy.init()
+    node = Bno055Node()
+    node.setup()
     try:
-        """Main entry method for this ROS2 node."""
-        # Initialize ROS Client Libraries (RCL) for Python:
-        rclpy.init()
-
-        # Create & initialize ROS2 node:
-        node = Bno055Node()
-        node.setup()
-
-        # Create lock object to prevent overlapping data queries
-        lock = threading.Lock()
-
-        def read_data():
-            """Periodic data_query_timer executions to retrieve sensor IMU data."""
-            if lock.locked():
-                # critical area still locked
-                # that means that the previous data query is still being processed
-                node.get_logger().warn('Message communication in progress - skipping query cycle')
-                return
-
-            # Acquire lock before entering critical area to prevent overlapping data queries
-            lock.acquire()
-            try:
-                # perform synchronized block:
-                node.sensor.get_sensor_data()
-            except BusOverRunException:
-                # data not available yet, wait for next cycle | see #5
-                return
-            except Exception as e:  # noqa: B902
-                node.get_logger().warn('Receiving sensor data failed with %s:"%s"'
-                                       % (type(e).__name__, e))
-            finally:
-                lock.release()
-
-        def log_calibration_status():
-            """Periodic logging of calibration data (quality indicators)."""
-            if lock.locked():
-                # critical area still locked
-                # that means that the previous data query is still being processed
-                node.get_logger().warn('Message communication in progress - skipping query cycle')
-                # traceback.print_exc()
-                return
-
-            # Acquire lock before entering critical area to prevent overlapping data queries
-            lock.acquire()
-            try:
-                # perform synchronized block:
-                node.sensor.get_calib_status()
-            except Exception as e:  # noqa: B902
-                node.get_logger().warn('Receiving calibration status failed with %s:"%s"'
-                                       % (type(e).__name__, e))
-                # traceback.print_exc()
-            finally:
-                lock.release()
-
-        # start regular sensor transmissions:
-        # please be aware that frequencies around 30Hz and above might cause performance impacts:
-        # https://github.com/ros2/rclpy/issues/520
-        f = 1.0 / float(node.param.data_query_frequency.value)
-        data_query_timer = node.create_timer(f, read_data)
-
-        # start regular calibration status logging
-        f = 1.0 / float(node.param.calib_status_frequency.value)
-        status_timer = node.create_timer(f, log_calibration_status)
-
         rclpy.spin(node)
-
     except KeyboardInterrupt:
         node.get_logger().info('Ctrl+C received - exiting...')
-        sys.exit(0)
     finally:
         node.get_logger().info('ROS node shutdown')
-        try:
-            node.destroy_timer(data_query_timer)
-            node.destroy_timer(status_timer)
-        except UnboundLocalError:
-            node.get_logger().info('No timers to shutdown')
-        node.destroy_node()
-        rclpy.shutdown()
-
+        rclpy.try_shutdown()
 
 if __name__ == '__main__':
     main()

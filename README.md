@@ -42,13 +42,19 @@ ros2 run bno055 bno055 --ros-args --params-file ./src/bno055/bno055/params/bno05
 - **uart_port**: The UART port to use; default='/dev/ttyUSB0'
 - **uart_baudrate**: The baud rate to use; default=115200
 - **uart_timeout**: The timeout for UART transmissions in seconds to use; default=0.1
-  
+
+### I2C Connection
+
 ### Sensor Configuration
 
 - **frame_id**: coordinate frame id of sensor default='bno055'
 - **baudrate**: baudrate of sensor default=115200
-- **data_query_frequency**: frequency (HZ) to read and publish data from sensor; default=100 Hz
-- **calib_status_frequency**: frequency (HZ) to read and publish calibration status data from sensor; default=0.1 Hz
+- **imu_query_frequency**: frequency (Hz) to read and publish raw inertial data from sensor; default=100 Hz
+- **rot_query_frequency**: frequency (Hz) to read and publish quaternion data from sensor; default=10 Hz
+- **gra_query_frequency**: frequency (Hz) to read and publish gravity data from sensor; default=10 Hz
+- **mag_query_frequency**: frequency (Hz) to read and publish magnetic data from sensor; default=10 Hz
+- **tmp_query_frequency**: frequency (Hz) to read and publish temperature data from sensor; default=1 Hz
+- **cal_query_frequency**: frequency (Hz) to read and publish calibration status data from sensor; default=1 Hz
 - **placement_axis_remap**: The sensor placement configuration (Axis remapping) defines the position and orientation of the sensor mount.
 See Bosch BNO055 datasheet section "Axis Remap" for valid positions: "P0", "P1" (default), "P2", "P3", "P4", "P5", "P6", "P7".   
 

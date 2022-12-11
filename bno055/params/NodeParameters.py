@@ -68,9 +68,12 @@ class NodeParameters:
         # tf frame id
         node.declare_parameter('frame_id', value='bno055')
         # Node timer frequency in Hz, defining how often sensor data is requested
-        node.declare_parameter('data_query_frequency', value=10)
-        # Node timer frequency in Hz, defining how often calibration status data is requested
-        node.declare_parameter('calib_status_frequency', value=0.1)
+        node.declare_parameter('imu_query_frequency', value=100)
+        node.declare_parameter('rot_query_frequency', value=10)
+        node.declare_parameter('gra_query_frequency', value=10)
+        node.declare_parameter('mag_query_frequency', value=10)
+        node.declare_parameter('tmp_query_frequency', value=1)
+        node.declare_parameter('cal_query_frequency', value=1)
         # sensor operation mode
         node.declare_parameter('operation_mode', value=0x0C)
         # placement_axis_remap defines the position and orientation of the sensor mount
@@ -127,13 +130,29 @@ class NodeParameters:
             self.frame_id = node.get_parameter('frame_id')
             node.get_logger().info('\tframe_id:\t\t"%s"' % self.frame_id.value)
 
-            self.data_query_frequency = node.get_parameter('data_query_frequency')
-            node.get_logger().info('\tdata_query_frequency:\t"%s"'
-                                   % self.data_query_frequency.value)
+            self.imu_query_frequency = node.get_parameter('imu_query_frequency')
+            node.get_logger().info('\imu_query_frequency:\t"%s"'
+                                   % self.imu_query_frequency.value)
 
-            self.calib_status_frequency = node.get_parameter('calib_status_frequency')
-            node.get_logger().info('\tcalib_status_frequency:\t"%s"'
-                                   % self.calib_status_frequency.value)
+            self.mag_query_frequency = node.get_parameter('mag_query_frequency')
+            node.get_logger().info('\mag_query_frequency:\t"%s"'
+                                   % self.mag_query_frequency.value)
+
+            self.rot_query_frequency = node.get_parameter('rot_query_frequency')
+            node.get_logger().info('\rot_query_frequency:\t"%s"'
+                                   % self.rot_query_frequency.value)
+
+            self.gra_query_frequency = node.get_parameter('gra_query_frequency')
+            node.get_logger().info('\gra_query_frequency:\t"%s"'
+                                   % self.gra_query_frequency.value)
+
+            self.tmp_query_frequency = node.get_parameter('tmp_query_frequency')
+            node.get_logger().info('\tmp_query_frequency:\t"%s"'
+                                   % self.tmp_query_frequency.value)
+
+            self.cal_query_frequency = node.get_parameter('cal_query_frequency')
+            node.get_logger().info('\cal_query_frequency:\t"%s"'
+                                   % self.cal_query_frequency.value)
 
             self.operation_mode = node.get_parameter('operation_mode')
             node.get_logger().info('\toperation_mode:\t\t"%s"' % self.operation_mode.value)

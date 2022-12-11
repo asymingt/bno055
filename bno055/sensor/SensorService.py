@@ -35,9 +35,9 @@ from bno055 import registers
 from bno055.connectors.Connector import Connector
 from bno055.params.NodeParameters import NodeParameters
 
-from geometry_msgs.msg import Quaternion
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+from geometry_msgs.msg import QuaternionStamped, Vector3Stamped
 from sensor_msgs.msg import Imu, MagneticField, Temperature
 from std_msgs.msg import String
 from example_interfaces.srv import Trigger
@@ -54,12 +54,13 @@ class SensorService:
         prefix = self.param.ros_topic_prefix.value
         QoSProf = QoSProfile(depth=10)
 
-        # create topic publishers:
-        self.pub_imu_raw = node.create_publisher(Imu, prefix + 'imu_raw', QoSProf)
+        self.pub_rot = node.create_publisher(QuaternionStamped, prefix + 'quaternion', QoSProf)
+        self.pub_gra = node.create_publisher(Vector3Stamped, prefix + 'gravity', QoSProf)
         self.pub_imu = node.create_publisher(Imu, prefix + 'imu', QoSProf)
         self.pub_mag = node.create_publisher(MagneticField, prefix + 'mag', QoSProf)
-        self.pub_temp = node.create_publisher(Temperature, prefix + 'temp', QoSProf)
-        self.pub_calib_status = node.create_publisher(String, prefix + 'calib_status', QoSProf)
+        self.pub_tmp = node.create_publisher(Temperature, prefix + 'temp', QoSProf)
+        self.pub_cal = node.create_publisher(String, prefix + 'calib_status', QoSProf)
+
         self.srv = self.node.create_service(Trigger, prefix + 'calibration_request', self.calibration_request_callback)
 
     def configure(self):
@@ -136,134 +137,116 @@ class SensorService:
 
         self.node.get_logger().info('Bosch BNO055 IMU configuration complete.')
 
-    def get_sensor_data(self):
-        """Read IMU data from the sensor, parse and publish."""
-        # Initialize ROS msgs
-        imu_raw_msg = Imu()
-        imu_msg = Imu()
+    def pub_mag_data(self):
+        """Read magnetic field"""
+        mag_buf = self.con.receive(registers.BNO055_MAG_DATA_X_LSB_ADDR, 6)
         mag_msg = MagneticField()
-        temp_msg = Temperature()
-
-        # read from sensor
-        buf = self.con.receive(registers.BNO055_ACCEL_DATA_X_LSB_ADDR, 45)
-        # Publish raw data
-        imu_raw_msg.header.stamp = self.node.get_clock().now().to_msg()
-        imu_raw_msg.header.frame_id = self.param.frame_id.value
-        # TODO: do headers need sequence counters now?
-        # imu_raw_msg.header.seq = seq
-
-        # TODO: make this an option to publish?
-        imu_raw_msg.orientation_covariance = [
-            self.param.variance_orientation.value[0], 0.0, 0.0,
-            0.0, self.param.variance_orientation.value[1], 0.0,
-            0.0, 0.0, self.param.variance_orientation.value[2]
-        ]
-
-        imu_raw_msg.linear_acceleration.x = \
-            self.unpackBytesToFloat(buf[0], buf[1]) / self.param.acc_factor.value
-        imu_raw_msg.linear_acceleration.y = \
-            self.unpackBytesToFloat(buf[2], buf[3]) / self.param.acc_factor.value
-        imu_raw_msg.linear_acceleration.z = \
-            self.unpackBytesToFloat(buf[4], buf[5]) / self.param.acc_factor.value
-        imu_raw_msg.linear_acceleration_covariance = [
-            self.param.variance_acc.value[0], 0.0, 0.0,
-            0.0, self.param.variance_acc.value[1], 0.0,
-            0.0, 0.0, self.param.variance_acc.value[2]
-        ]
-        imu_raw_msg.angular_velocity.x = \
-            self.unpackBytesToFloat(buf[12], buf[13]) / self.param.gyr_factor.value
-        imu_raw_msg.angular_velocity.y = \
-            self.unpackBytesToFloat(buf[14], buf[15]) / self.param.gyr_factor.value
-        imu_raw_msg.angular_velocity.z = \
-            self.unpackBytesToFloat(buf[16], buf[17]) / self.param.gyr_factor.value
-        imu_raw_msg.angular_velocity_covariance = [
-            self.param.variance_angular_vel.value[0], 0.0, 0.0,
-            0.0, self.param.variance_angular_vel.value[1], 0.0,
-            0.0, 0.0, self.param.variance_angular_vel.value[2]
-        ]
-        # node.get_logger().info('Publishing imu message')
-        self.pub_imu_raw.publish(imu_raw_msg)
-
-        # TODO: make this an option to publish?
-        # Publish filtered data
-        imu_msg.header.stamp = self.node.get_clock().now().to_msg()
-        imu_msg.header.frame_id = self.param.frame_id.value
-
-        q = Quaternion()
-        # imu_msg.header.seq = seq
-        q.w = self.unpackBytesToFloat(buf[24], buf[25])
-        q.x = self.unpackBytesToFloat(buf[26], buf[27])
-        q.y = self.unpackBytesToFloat(buf[28], buf[29])
-        q.z = self.unpackBytesToFloat(buf[30], buf[31])
-        # TODO(flynneva): replace with standard normalize() function
-        # normalize
-        norm = sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w)
-        imu_msg.orientation.x = q.x / norm
-        imu_msg.orientation.y = q.y / norm
-        imu_msg.orientation.z = q.z / norm
-        imu_msg.orientation.w = q.w / norm
-
-        imu_msg.orientation_covariance = imu_raw_msg.orientation_covariance
-
-        imu_msg.linear_acceleration.x = \
-            self.unpackBytesToFloat(buf[32], buf[33]) / self.param.acc_factor.value
-        imu_msg.linear_acceleration.y = \
-            self.unpackBytesToFloat(buf[34], buf[35]) / self.param.acc_factor.value
-        imu_msg.linear_acceleration.z = \
-            self.unpackBytesToFloat(buf[36], buf[37]) / self.param.acc_factor.value
-        imu_msg.linear_acceleration_covariance = imu_raw_msg.linear_acceleration_covariance
-        imu_msg.angular_velocity.x = \
-            self.unpackBytesToFloat(buf[12], buf[13]) / self.param.gyr_factor.value
-        imu_msg.angular_velocity.y = \
-            self.unpackBytesToFloat(buf[14], buf[15]) / self.param.gyr_factor.value
-        imu_msg.angular_velocity.z = \
-            self.unpackBytesToFloat(buf[16], buf[17]) / self.param.gyr_factor.value
-        imu_msg.angular_velocity_covariance = imu_raw_msg.angular_velocity_covariance
-        self.pub_imu.publish(imu_msg)
-
-        # Publish magnetometer data
         mag_msg.header.stamp = self.node.get_clock().now().to_msg()
         mag_msg.header.frame_id = self.param.frame_id.value
-        # mag_msg.header.seq = seq
         mag_msg.magnetic_field.x = \
-            self.unpackBytesToFloat(buf[6], buf[7]) / self.param.mag_factor.value
+            self.unpackBytesToFloat(mag_buf[0], mag_buf[1]) / self.param.mag_factor.value
         mag_msg.magnetic_field.y = \
-            self.unpackBytesToFloat(buf[8], buf[9]) / self.param.mag_factor.value
+            self.unpackBytesToFloat(mag_buf[2], mag_buf[3]) / self.param.mag_factor.value
         mag_msg.magnetic_field.z = \
-            self.unpackBytesToFloat(buf[10], buf[11]) / self.param.mag_factor.value
+            self.unpackBytesToFloat(mag_buf[4], mag_buf[5]) / self.param.mag_factor.value
         mag_msg.magnetic_field_covariance = [
             self.param.variance_mag.value[0], 0.0, 0.0,
             0.0, self.param.variance_mag.value[1], 0.0,
             0.0, 0.0, self.param.variance_mag.value[2]
         ]
         self.pub_mag.publish(mag_msg)
+        return
 
-        # Publish temperature
+    def pub_imu_data(self):
+        """Read raw IMU"""
+        lin_acc_buf = self.con.receive(registers.BNO055_ACCEL_DATA_X_LSB_ADDR, 6)
+        ang_vel_buf = self.con.receive(registers.BNO055_GYRO_DATA_X_LSB_ADDR, 6)
+        imu_msg = Imu()
+        imu_msg.header.stamp = self.node.get_clock().now().to_msg()
+        imu_msg.header.frame_id = self.param.frame_id.value
+        imu_msg.orientation_covariance = [
+            self.param.variance_orientation.value[0], 0.0, 0.0,
+            0.0, self.param.variance_orientation.value[1], 0.0,
+            0.0, 0.0, self.param.variance_orientation.value[2]
+        ]
+        imu_msg.linear_acceleration.x = \
+            self.unpackBytesToFloat(lin_acc_buf[0], lin_acc_buf[1]) / self.param.acc_factor.value
+        imu_msg.linear_acceleration.y = \
+            self.unpackBytesToFloat(lin_acc_buf[2], lin_acc_buf[3]) / self.param.acc_factor.value
+        imu_msg.linear_acceleration.z = \
+            self.unpackBytesToFloat(lin_acc_buf[4], lin_acc_buf[5]) / self.param.acc_factor.value
+        imu_msg.linear_acceleration_covariance = [
+            self.param.variance_acc.value[0], 0.0, 0.0,
+            0.0, self.param.variance_acc.value[1], 0.0,
+            0.0, 0.0, self.param.variance_acc.value[2]
+        ]
+        imu_msg.angular_velocity.x = \
+            self.unpackBytesToFloat(ang_vel_buf[0], ang_vel_buf[1]) / self.param.gyr_factor.value
+        imu_msg.angular_velocity.y = \
+            self.unpackBytesToFloat(ang_vel_buf[2], ang_vel_buf[3]) / self.param.gyr_factor.value
+        imu_msg.angular_velocity.z = \
+            self.unpackBytesToFloat(ang_vel_buf[4], ang_vel_buf[5]) / self.param.gyr_factor.value
+        imu_msg.angular_velocity_covariance = [
+            self.param.variance_angular_vel.value[0], 0.0, 0.0,
+            0.0, self.param.variance_angular_vel.value[1], 0.0,
+            0.0, 0.0, self.param.variance_angular_vel.value[2]
+        ]
+        self.pub_imu.publish(imu_msg)
+
+    def pub_tmp_data(self):
+        """Read temperature"""
+        tmp_buf = self.con.receive(registers.BNO055_TEMP_ADDR, 1)
+        temp_msg = Temperature()
         temp_msg.header.stamp = self.node.get_clock().now().to_msg()
         temp_msg.header.frame_id = self.param.frame_id.value
-        # temp_msg.header.seq = seq
-        temp_msg.temperature = float(buf[44])
-        self.pub_temp.publish(temp_msg)
+        temp_msg.temperature = float(tmp_buf[0])
+        self.pub_tmp.publish(temp_msg)
 
-    def get_calib_status(self):
-        """
-        Read calibration status for sys/gyro/acc/mag.
+    def pub_rot_data(self):
+        """Read unit quaternion."""
+        quat_buf = self.con.receive(registers.BNO055_QUATERNION_DATA_W_LSB_ADDR, 8)
+        quat_msg = QuaternionStamped()
+        quat_msg.header.stamp = self.node.get_clock().now().to_msg()
+        quat_msg.header.frame_id = self.param.frame_id.value
+        quat_msg.quaternion.w = self.unpackBytesToFloat(quat_buf[0], quat_buf[1])
+        quat_msg.quaternion.x = self.unpackBytesToFloat(quat_buf[2], quat_buf[3])
+        quat_msg.quaternion.y = self.unpackBytesToFloat(quat_buf[4], quat_buf[5])
+        quat_msg.quaternion.z = self.unpackBytesToFloat(quat_buf[6], quat_buf[7])
+        norm = sqrt(
+            quat_msg.quaternion.x * quat_msg.quaternion.x +
+            quat_msg.quaternion.y * quat_msg.quaternion.y +
+            quat_msg.quaternion.z * quat_msg.quaternion.z +
+            quat_msg.quaternion.w * quat_msg.quaternion.w)
+        if norm > 0:
+            quat_msg.quaternion.x = quat_msg.quaternion.x / norm
+            quat_msg.quaternion.y = quat_msg.quaternion.y / norm
+            quat_msg.quaternion.z = quat_msg.quaternion.z / norm
+            quat_msg.quaternion.w = quat_msg.quaternion.w / norm
+        self.pub_rot.publish(quat_msg)
 
-        Quality scale: 0 = bad, 3 = best
-        """
+    def pub_gra_data(self):
+        """Read gravitational vector."""
+        vec_buf = self.con.receive(registers.BNO055_GRAVITY_DATA_X_LSB_ADDR, 6)
+        vec_msg = Vector3Stamped()
+        vec_msg.header.stamp = self.node.get_clock().now().to_msg()
+        vec_msg.header.frame_id = self.param.frame_id.value
+        vec_msg.vector.x = self.unpackBytesToFloat(vec_buf[0], vec_buf[1])
+        vec_msg.vector.y = self.unpackBytesToFloat(vec_buf[2], vec_buf[3])
+        vec_msg.vector.z = self.unpackBytesToFloat(vec_buf[4], vec_buf[5])
+        self.pub_gra.publish(vec_msg)
+
+
+    def pub_cal_data(self):
+        """Read calibration status for sys/gyro/acc/mag"""
         calib_status = self.con.receive(registers.BNO055_CALIB_STAT_ADDR, 1)
         sys = (calib_status[0] >> 6) & 0x03
         gyro = (calib_status[0] >> 4) & 0x03
         accel = (calib_status[0] >> 2) & 0x03
         mag = calib_status[0] & 0x03
-
-        # Create dictionary (map) and convert it to JSON string:
         calib_status_dict = {'sys': sys, 'gyro': gyro, 'accel': accel, 'mag': mag}
         calib_status_str = String()
         calib_status_str.data = json.dumps(calib_status_dict)
-
-        # Publish via ROS topic:
-        self.pub_calib_status.publish(calib_status_str)
+        self.pub_cal.publish(calib_status_str)
 
     def get_calib_data(self):
         """Read all calibration data."""
