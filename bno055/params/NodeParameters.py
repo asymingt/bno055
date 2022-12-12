@@ -131,27 +131,27 @@ class NodeParameters:
             node.get_logger().info('\tframe_id:\t\t"%s"' % self.frame_id.value)
 
             self.imu_query_frequency = node.get_parameter('imu_query_frequency')
-            node.get_logger().info('\imu_query_frequency:\t"%s"'
+            node.get_logger().info('\timu_query_frequency:\t"%s"'
                                    % self.imu_query_frequency.value)
 
             self.mag_query_frequency = node.get_parameter('mag_query_frequency')
-            node.get_logger().info('\mag_query_frequency:\t"%s"'
+            node.get_logger().info('\tmag_query_frequency:\t"%s"'
                                    % self.mag_query_frequency.value)
 
             self.rot_query_frequency = node.get_parameter('rot_query_frequency')
-            node.get_logger().info('\rot_query_frequency:\t"%s"'
+            node.get_logger().info('\trot_query_frequency:\t"%s"'
                                    % self.rot_query_frequency.value)
 
             self.gra_query_frequency = node.get_parameter('gra_query_frequency')
-            node.get_logger().info('\gra_query_frequency:\t"%s"'
+            node.get_logger().info('\tgra_query_frequency:\t"%s"'
                                    % self.gra_query_frequency.value)
 
             self.tmp_query_frequency = node.get_parameter('tmp_query_frequency')
-            node.get_logger().info('\tmp_query_frequency:\t"%s"'
+            node.get_logger().info('\ttmp_query_frequency:\t"%s"'
                                    % self.tmp_query_frequency.value)
 
             self.cal_query_frequency = node.get_parameter('cal_query_frequency')
-            node.get_logger().info('\cal_query_frequency:\t"%s"'
+            node.get_logger().info('\tcal_query_frequency:\t"%s"'
                                    % self.cal_query_frequency.value)
 
             self.operation_mode = node.get_parameter('operation_mode')
