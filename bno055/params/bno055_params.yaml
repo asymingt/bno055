@@ -7,8 +7,12 @@ bno055:
     uart_port: "/dev/ttyUSB0"
     uart_baudrate: 115200
     uart_timeout: 0.1
-    data_query_frequency: 100
-    calib_status_frequency: 0.1
+    imu_query_frequency: 100
+    rot_query_frequency: 10
+    gra_query_frequency: 10
+    mag_query_frequency: 10
+    tmp_query_frequency: 1
+    cal_query_frequency: 1
     frame_id: "bno055"
     operation_mode: 0x0C
     placement_axis_remap: "P2"
